@@ -77,6 +77,7 @@ type PoolState struct {
 	WorkerCount   int              `json:"worker_count"`
 	ActiveWorkers int              `json:"active_workers"`
 	QueueSize     int              `json:"queue_size"`
+	QueueCapacity int              `json:"queue_capacity"`
 	Workers       []*WorkerState   `json:"workers"`
 	Metrics       *MetricsSnapshot `json:"metrics"`
 }
@@ -588,6 +589,7 @@ func (s *Server) collectPoolState(p pool.Pool, poolType string, config *pool.Con
 		WorkerCount:   len(poolWorkers),
 		ActiveWorkers: int(m.ActiveWorkers.Load()),
 		QueueSize:     int(m.QueueSize.Load()),
+		QueueCapacity: config.QueueSize,
 		Workers:       workers,
 		Metrics: &MetricsSnapshot{
 			TasksSubmitted:    m.TasksSubmitted.Load(),
