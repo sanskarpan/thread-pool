@@ -1,0 +1,247 @@
+{
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "schemes": [
+    "http",
+    "https"
+  ],
+  "swagger": "2.0",
+  "info": {
+    "description": "This package contains the HTTP server, WebSocket handling, and API endpoints\nfor creating, monitoring, and interacting with thread pools in real-time.",
+    "title": "provides the web UI backend for the Thread Pool Visualizer.",
+    "version": "1.0.0"
+  },
+  "host": "localhost:8080",
+  "basePath": "/api/v1",
+  "securityDefinitions": {
+    "ApiKeyHeader": {
+      "type": "apiKey",
+      "name": "X-API-Key",
+      "in": "header",
+      "description": "Primary API-key header. You can also send Authorization: Bearer <key>."
+    },
+    "ApiKeyQuery": {
+      "type": "apiKey",
+      "name": "api_key",
+      "in": "query",
+      "description": "Alternative query parameter for browser and websocket flows."
+    }
+  },
+  "paths": {
+    "/pool/create": {
+      "post": {
+        "description": "This endpoint stops any currently running pool and creates a new one with the specified type and parameters.",
+        "tags": [
+          "pools"
+        ],
+        "summary": "Create a New Thread Pool",
+        "operationId": "createPool",
+        "parameters": [
+          {
+            "x-go-name": "PoolType",
+            "description": "The type of pool to create (e.g., \"fixed\", \"cached\").",
+            "name": "pool_type",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "x-go-name": "WorkerCount",
+            "description": "The number of workers for a fixed pool.",
+            "name": "worker_count",
+            "in": "body",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "x-go-name": "QueueSize",
+            "description": "The size of the task queue.",
+            "name": "queue_size",
+            "in": "body",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "x-go-name": "MinWorkers",
+            "description": "The minimum number of workers for a dynamic pool.",
+            "name": "min_workers",
+            "in": "body",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "x-go-name": "MaxWorkers",
+            "description": "The maximum number of workers for a dynamic or cached pool.",
+            "name": "max_workers",
+            "in": "body",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "description": "The configuration for the new pool.",
+            "name": "PoolCreateRequest",
+            "in": "body",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "map[string]string",
+            "schema": {
+              "$ref": "#/definitions/map%5Bstring%5Dstring"
+            }
+          },
+          "400": {
+            "description": " Invalid request body"
+          }
+        }
+      }
+    },
+    "/pool/stop": {
+      "post": {
+        "description": "This endpoint gracefully shuts down the active thread pool.",
+        "tags": [
+          "pools"
+        ],
+        "summary": "Stop the Current Pool",
+        "operationId": "stopPool",
+        "responses": {
+          "200": {
+            "description": "map[string]string",
+            "schema": {
+              "$ref": "#/definitions/map%5Bstring%5Dstring"
+            }
+          }
+        }
+      }
+    },
+    "/pools": {
+      "get": {
+        "description": "This endpoint returns a list of the names and descriptions of the thread pool implementations that can be created.",
+        "tags": [
+          "pools"
+        ],
+        "summary": "Get Available Pool Types",
+        "operationId": "getPools",
+        "responses": {
+          "200": {
+            "description": "map[string]interface{}",
+            "schema": {
+              "$ref": "#/definitions/map%5Bstring%5Dinterface%7B%7D"
+            }
+          }
+        }
+      }
+    },
+    "/task/submit": {
+      "post": {
+        "description": "This endpoint submits a new task (or a batch of tasks) to the active pool for execution. delay_ms and cron_expression are supported when the active pool is scheduled. chain_dependencies links each task in a batch so each one starts after the previous completes.",
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Submit a New Task",
+        "operationId": "submitTask",
+        "parameters": [
+          {
+            "x-go-name": "Priority",
+            "description": "The priority of the task (0=Low, 1=Normal, 2=High, 3=Urgent).",
+            "name": "priority",
+            "in": "body",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "x-go-name": "Duration",
+            "description": "The simulated duration of the task in milliseconds.",
+            "name": "duration_ms",
+            "in": "body",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "x-go-name": "ShouldFail",
+            "description": "Whether the task should simulate a failure.",
+            "name": "should_fail",
+            "in": "body",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "x-go-name": "TaskCount",
+            "description": "The number of tasks to submit in this batch.",
+            "name": "task_count",
+            "in": "body",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "x-go-name": "DelayMS",
+            "description": "Delay before execution in milliseconds (scheduled pool only).",
+            "name": "delay_ms",
+            "in": "body",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "x-go-name": "CronExpression",
+            "description": "Cron expression for recurring tasks (scheduled pool only, 6-field format).",
+            "name": "cron_expression",
+            "in": "body",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "x-go-name": "ChainDependencies",
+            "description": "When true, each task in a batch depends on completion of the previous task.",
+            "name": "chain_dependencies",
+            "in": "body",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "The configuration for the new task(s).",
+            "name": "TaskSubmitRequest",
+            "in": "body",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "map[string]interface{}",
+            "schema": {
+              "$ref": "#/definitions/map%5Bstring%5Dinterface%7B%7D"
+            }
+          },
+          "400": {
+            "description": " Invalid request body or no active pool"
+          }
+        }
+      }
+    }
+  }
+}
