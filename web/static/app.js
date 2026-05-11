@@ -9,6 +9,7 @@ class PoolVisualizer {
         this.reconnectDelay = 1000;
         this.charts = {};
         this.workerAnimations = new Map();
+        this.valueAnimations = new WeakMap();
         this.poolConfig = {
             poolType: 'fixed',
             workerCount: 4,
@@ -26,6 +27,8 @@ class PoolVisualizer {
         this.activeQueueCapacity = this.poolConfig.queueSize;
         this.apiKey = new URLSearchParams(window.location.search).get('api_key') || '';
         this.theme = localStorage.getItem('thread-pool-theme') || 'dark';
+        this.prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        this.hasCharts = typeof window.Chart === 'function';
 
         this.init();
     }
@@ -35,6 +38,7 @@ class PoolVisualizer {
         this.setupEventListeners();
         this.initializeCharts();
         this.updateSchedulingControls();
+        this.setConnectionState('connecting');
         this.connectWebSocket();
         this.startAnimationLoop();
     }
@@ -54,6 +58,7 @@ class PoolVisualizer {
             this.ws.onopen = () => {
                 console.log('✓ WebSocket connected');
                 this.reconnectAttempts = 0;
+                this.setConnectionState('connected');
                 this.showNotification('Connected to server', 'success');
             };
 
@@ -76,6 +81,7 @@ class PoolVisualizer {
 
             this.ws.onclose = () => {
                 console.log('WebSocket disconnected');
+                this.setConnectionState('reconnecting');
                 this.handleReconnect();
             };
         } catch (err) {
@@ -94,6 +100,7 @@ class PoolVisualizer {
 
             setTimeout(() => this.connectWebSocket(), delay);
         } else {
+            this.setConnectionState('offline');
             this.showNotification('Connection lost. Please refresh the page.', 'error');
         }
     }
@@ -117,18 +124,28 @@ class PoolVisualizer {
         this.activeQueueCapacity = state.queue_capacity || this.activeQueueCapacity;
         const activePoolDisplay = document.getElementById('active-pool-display');
         if (activePoolDisplay) {
-            activePoolDisplay.textContent = `Active: ${this.activePoolType}`;
+            activePoolDisplay.textContent = `Current Pool: ${this.activePoolType}`;
         }
+        this.updateSchedulingControls();
         this.updateQueue(state.queue_size || 0, this.activeQueueCapacity);
+        this.setConnectionState('connected');
 
         // Update worker summary
         const activeCount = state.active_workers || 0;
         const totalCount = state.worker_count || 0;
         document.getElementById('active-count').textContent = activeCount;
         document.getElementById('idle-count').textContent = totalCount - activeCount;
+        this.updateEmptyStates(state.workers || []);
 
         // Update charts
         this.updateCharts(state.metrics || {});
+    }
+
+    updateEmptyStates(workers) {
+        const workersEmpty = document.getElementById('workers-empty-state');
+        if (workersEmpty) {
+            workersEmpty.classList.toggle('hidden', workers.length > 0);
+        }
     }
 
     updateMetrics(metrics) {
@@ -187,6 +204,8 @@ class PoolVisualizer {
 
         const state = worker.state || 'idle';
         const stateClass = state === 'busy' ? 'busy' : 'idle';
+        card.classList.toggle('busy', stateClass === 'busy');
+        card.classList.toggle('idle', stateClass !== 'busy');
 
         card.innerHTML = `
             <div class="worker-header">
@@ -216,6 +235,8 @@ class PoolVisualizer {
     updateWorkerCard(card, worker) {
         const state = worker.state || 'idle';
         const stateClass = state === 'busy' ? 'busy' : 'idle';
+        card.classList.toggle('busy', stateClass === 'busy');
+        card.classList.toggle('idle', stateClass !== 'busy');
 
         const statusElement = card.querySelector('.worker-status');
         const statusDot = card.querySelector('.status-dot');
@@ -262,6 +283,7 @@ class PoolVisualizer {
         const fill = document.getElementById('queue-fill');
         const currentEl = document.getElementById('queue-current');
         const capacityEl = document.getElementById('queue-capacity');
+        const queueBar = document.getElementById('queue-bar');
 
         const percentage = capacity > 0 ? (current / capacity) * 100 : 0;
         fill.style.width = `${Math.min(percentage, 100)}%`;
@@ -277,6 +299,30 @@ class PoolVisualizer {
 
         this.animateValue(currentEl, current);
         capacityEl.textContent = capacity;
+        if (queueBar) {
+            queueBar.setAttribute('aria-valuemax', String(capacity));
+            queueBar.setAttribute('aria-valuenow', String(current));
+        }
+
+        const healthChip = document.getElementById('queue-health-chip');
+        const queueSummary = document.getElementById('queue-summary');
+        let health = 'Healthy';
+        if (percentage > 80) {
+            health = 'Near capacity';
+        } else if (percentage > 50) {
+            health = 'Elevated';
+        } else if (percentage > 0) {
+            health = 'Active';
+        }
+        if (healthChip) {
+            healthChip.textContent = health;
+            healthChip.dataset.state = health.toLowerCase().replace(/\s+/g, '-');
+        }
+        if (queueSummary) {
+            queueSummary.textContent = capacity > 0
+                ? `${Math.round(percentage)}% of queue capacity is currently in use.`
+                : 'Queue is unbounded for the active pool.';
+        }
     }
 
     animateValue(element, targetValue) {
@@ -284,6 +330,16 @@ class PoolVisualizer {
             element = document.getElementById(element);
         }
         if (!element) return;
+
+        if (this.prefersReducedMotion) {
+            element.textContent = Math.round(targetValue);
+            return;
+        }
+
+        const existingInterval = this.valueAnimations.get(element);
+        if (existingInterval) {
+            clearInterval(existingInterval);
+        }
 
         const currentValue = parseFloat(element.textContent) || 0;
         const diff = targetValue - currentValue;
@@ -301,15 +357,25 @@ class PoolVisualizer {
             if (currentStep >= steps) {
                 element.textContent = Math.round(targetValue);
                 clearInterval(interval);
+                this.valueAnimations.delete(element);
             } else {
                 element.textContent = Math.round(newValue);
             }
         }, stepDuration);
+
+        this.valueAnimations.set(element, interval);
     }
 
     // ==================== Charts ====================
 
     initializeCharts() {
+        if (!this.hasCharts) {
+            document.getElementById('throughput-summary').textContent = 'Throughput charts unavailable because Chart.js did not load.';
+            document.getElementById('utilization-summary').textContent = 'Utilization charts unavailable because Chart.js did not load.';
+            this.showNotification('Charts unavailable: continuing without Chart.js', 'warning');
+            return;
+        }
+
         const palette = this.getThemePalette();
 
         // Throughput chart
@@ -380,7 +446,7 @@ class PoolVisualizer {
                     intersect: false
                 },
                 animation: {
-                    duration: 300
+                    duration: this.prefersReducedMotion ? 0 : 300
                 }
             }
         });
@@ -433,14 +499,34 @@ class PoolVisualizer {
                     }
                 },
                 animation: {
-                    animateRotate: true,
-                    animateScale: true
+                    animateRotate: !this.prefersReducedMotion,
+                    animateScale: !this.prefersReducedMotion
                 }
             }
         });
     }
 
     updateCharts(metrics) {
+        const throughputEmpty = document.getElementById('throughput-empty-state');
+        const utilizationEmpty = document.getElementById('utilization-empty-state');
+        if (!this.charts.throughput || !this.charts.utilization) {
+            document.getElementById('throughput-summary').textContent = `Current throughput: ${metrics.throughput || 0} tasks per second.`;
+            document.getElementById('utilization-summary').textContent = `Current worker utilization: ${(metrics.worker_utilization || 0).toFixed(1)} percent.`;
+            const throughputChip = document.getElementById('throughput-chip');
+            const utilizationChip = document.getElementById('utilization-chip');
+            if (throughputChip) {
+                throughputChip.textContent = metrics.throughput > 0 ? 'Live' : 'Waiting';
+                throughputChip.dataset.state = metrics.throughput > 0 ? 'live' : 'waiting';
+            }
+            if (utilizationChip) {
+                utilizationChip.textContent = (metrics.worker_utilization || 0) > 0 ? 'Active' : 'Idle';
+                utilizationChip.dataset.state = (metrics.worker_utilization || 0) > 0 ? 'active' : 'idle';
+            }
+            if (throughputEmpty) throughputEmpty.classList.toggle('hidden', (metrics.throughput || 0) > 0);
+            if (utilizationEmpty) utilizationEmpty.classList.toggle('hidden', (metrics.worker_utilization || 0) > 0);
+            return;
+        }
+
         const MAX_DATA_POINTS = 300; // 5 minutes of data at 1s intervals
 
         // Update throughput chart
@@ -458,6 +544,13 @@ class PoolVisualizer {
         }
 
         this.charts.throughput.update('none');
+        document.getElementById('throughput-summary').textContent = `Current throughput: ${metrics.throughput || 0} tasks per second.`;
+        const throughputChip = document.getElementById('throughput-chip');
+        if (throughputChip) {
+            throughputChip.textContent = metrics.throughput > 0 ? `${metrics.throughput} t/s` : 'Waiting';
+            throughputChip.dataset.state = metrics.throughput > 0 ? 'live' : 'waiting';
+        }
+        if (throughputEmpty) throughputEmpty.classList.toggle('hidden', (metrics.throughput || 0) > 0);
 
         // Update utilization chart
         const workerUtil = metrics.worker_utilization || 0;
@@ -466,6 +559,13 @@ class PoolVisualizer {
             100 - workerUtil
         ];
         this.charts.utilization.update('none');
+        document.getElementById('utilization-summary').textContent = `Current worker utilization: ${workerUtil.toFixed(1)} percent.`;
+        const utilizationChip = document.getElementById('utilization-chip');
+        if (utilizationChip) {
+            utilizationChip.textContent = workerUtil > 0 ? `${workerUtil.toFixed(0)}% busy` : 'Idle';
+            utilizationChip.dataset.state = workerUtil > 0 ? 'active' : 'idle';
+        }
+        if (utilizationEmpty) utilizationEmpty.classList.toggle('hidden', workerUtil > 0);
     }
 
     // ==================== Event Handlers ====================
@@ -492,8 +592,10 @@ class PoolVisualizer {
 
         const icon = document.getElementById('theme-toggle-icon');
         const label = document.getElementById('theme-toggle-label');
+        const toggle = document.getElementById('theme-toggle');
         if (icon) icon.textContent = this.theme === 'light' ? '☀︎' : '☾';
-        if (label) label.textContent = this.theme === 'light' ? 'Light Mode' : 'Dark Mode';
+        if (label) label.textContent = this.theme === 'light' ? 'Switch to Dark' : 'Switch to Light';
+        if (toggle) toggle.setAttribute('aria-label', this.theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme');
 
         this.refreshChartTheme();
     }
@@ -537,23 +639,113 @@ class PoolVisualizer {
         const cronGroup = document.getElementById('cron-group');
         const chainGroup = document.getElementById('chain-group');
         const chainCheckbox = document.getElementById('chain-dependencies');
+        const delayInput = document.getElementById('delay-ms');
+        const cronInput = document.getElementById('cron-expression');
         const helper = document.getElementById('scheduling-helper');
+        const submitButton = document.getElementById('submit-task');
+        const submitContext = document.getElementById('submit-context');
+        const scheduledReady = this.activePoolType === 'scheduled';
+        const scheduledMode = mode !== 'immediate';
 
         delayGroup.classList.toggle('hidden', mode !== 'delayed');
         cronGroup.classList.toggle('hidden', mode !== 'recurring');
         chainGroup.classList.toggle('hidden', mode !== 'immediate');
         chainCheckbox.disabled = mode !== 'immediate';
         chainCheckbox.checked = this.poolConfig.chainDependencies;
+        delayInput.disabled = mode !== 'delayed';
+        cronInput.disabled = mode !== 'recurring';
+        submitButton.disabled = scheduledMode && !scheduledReady;
 
         if (helper) {
-            if (mode === 'delayed') {
-                helper.textContent = 'Delayed and recurring submissions require a scheduled pool.';
+            if (scheduledMode && !scheduledReady) {
+                helper.textContent = 'Create a scheduled pool before submitting delayed or recurring work.';
+            } else if (mode === 'delayed') {
+                helper.textContent = 'Delayed runs wait for the configured delay before entering the scheduled pool.';
             } else if (mode === 'recurring') {
-                helper.textContent = 'Recurring submissions use a 6-field cron expression and require a scheduled pool.';
+                helper.textContent = 'Recurring submissions use a 6-field cron expression and stay active until the pool is replaced.';
             } else {
                 helper.textContent = 'Immediate batches can optionally chain task dependencies.';
             }
         }
+
+        if (submitContext) {
+            if (scheduledMode && !scheduledReady) {
+                submitContext.textContent = 'Scheduling controls are locked until a scheduled pool is active.';
+            } else if (mode === 'delayed') {
+                submitContext.textContent = `Delayed submission will wait ${this.poolConfig.delayMs}ms before execution.`;
+            } else if (mode === 'recurring') {
+                submitContext.textContent = `Recurring submission uses cron: ${this.poolConfig.cronExpression}.`;
+            } else if (this.poolConfig.chainDependencies) {
+                submitContext.textContent = 'Each task in the batch will wait for the previous task to finish.';
+            } else {
+                submitContext.textContent = 'Immediate batches send directly to the active pool.';
+            }
+        }
+    }
+
+    setConnectionState(state) {
+        const value = document.getElementById('connection-status-value');
+        const pill = document.getElementById('connection-status');
+        if (!value || !pill) return;
+
+        const stateMap = {
+            connected: 'Live',
+            connecting: 'Connecting',
+            reconnecting: 'Reconnecting',
+            offline: 'Offline'
+        };
+
+        pill.dataset.state = state;
+        value.textContent = stateMap[state] || 'Unknown';
+        document.body.classList.toggle('is-stale', state !== 'connected');
+
+        const banner = document.getElementById('status-banner');
+        const bannerTitle = document.getElementById('status-banner-title');
+        const bannerText = document.getElementById('status-banner-text');
+        if (banner && bannerTitle && bannerText) {
+            const showBanner = state !== 'connected';
+            banner.classList.toggle('hidden', !showBanner);
+            banner.dataset.state = state;
+            if (state === 'offline') {
+                bannerTitle.textContent = 'Offline';
+                bannerText.textContent = 'Live data is unavailable. Controls may not reflect the actual server state until the connection returns.';
+            } else if (state === 'reconnecting') {
+                bannerTitle.textContent = 'Reconnecting';
+                bannerText.textContent = 'Attempting to restore the live session. Displayed metrics may be stale until reconnection succeeds.';
+            } else {
+                bannerTitle.textContent = 'Connecting';
+                bannerText.textContent = 'Establishing a live session with the thread pool service.';
+            }
+        }
+    }
+
+    setupSelectableGroup(selector, currentValue, onSelect) {
+        const buttons = Array.from(document.querySelectorAll(selector));
+        const syncState = (value) => {
+            buttons.forEach((button) => {
+                const active = String(button.dataset.pool ?? button.dataset.priority ?? button.dataset.mode) === String(value);
+                button.classList.toggle('active', active);
+                button.setAttribute('aria-checked', active ? 'true' : 'false');
+                button.tabIndex = active ? 0 : -1;
+            });
+        };
+
+        syncState(currentValue);
+        buttons.forEach((button, index) => {
+            button.addEventListener('click', () => {
+                const value = button.dataset.pool ?? button.dataset.priority ?? button.dataset.mode;
+                onSelect(value);
+                syncState(value);
+            });
+            button.addEventListener('keydown', (event) => {
+                if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+                event.preventDefault();
+                const delta = (event.key === 'ArrowRight' || event.key === 'ArrowDown') ? 1 : -1;
+                const nextIndex = (index + delta + buttons.length) % buttons.length;
+                buttons[nextIndex].focus();
+                buttons[nextIndex].click();
+            });
+        });
     }
 
     setupEventListeners() {
@@ -562,31 +754,18 @@ class PoolVisualizer {
             this.applyTheme(this.theme === 'light' ? 'dark' : 'light');
         });
 
-        // Pool type selector
-        document.querySelectorAll('.pool-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                document.querySelectorAll('.pool-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                this.poolConfig.poolType = btn.dataset.pool;
-            });
+        this.setupSelectableGroup('.pool-btn', this.poolConfig.poolType, (value) => {
+            this.poolConfig.poolType = value;
+            this.updateSchedulingControls();
         });
 
-        document.querySelectorAll('.mode-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                this.poolConfig.schedulingMode = btn.dataset.mode;
-                this.updateSchedulingControls();
-            });
+        this.setupSelectableGroup('.mode-btn', this.poolConfig.schedulingMode, (value) => {
+            this.poolConfig.schedulingMode = value;
+            this.updateSchedulingControls();
         });
 
-        // Priority selector
-        document.querySelectorAll('.priority-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                document.querySelectorAll('.priority-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                this.poolConfig.priority = parseInt(btn.dataset.priority);
-            });
+        this.setupSelectableGroup('.priority-btn', this.poolConfig.priority, (value) => {
+            this.poolConfig.priority = parseInt(value, 10);
         });
 
         // Worker count slider
@@ -626,16 +805,19 @@ class PoolVisualizer {
         delaySlider.addEventListener('input', (e) => {
             this.poolConfig.delayMs = parseInt(e.target.value);
             delayDisplay.textContent = e.target.value + 'ms';
+            this.updateSchedulingControls();
         });
 
         const cronInput = document.getElementById('cron-expression');
         cronInput.addEventListener('input', (e) => {
             this.poolConfig.cronExpression = e.target.value.trim();
+            this.updateSchedulingControls();
         });
 
         const chainCheckbox = document.getElementById('chain-dependencies');
         chainCheckbox.addEventListener('change', (e) => {
             this.poolConfig.chainDependencies = e.target.checked;
+            this.updateSchedulingControls();
         });
 
         // Create pool button
@@ -682,6 +864,7 @@ class PoolVisualizer {
             this.appliedPoolConfig = { ...this.poolConfig };
             this.activePoolType = this.poolConfig.poolType;
             this.activeQueueCapacity = this.poolConfig.queueSize;
+            this.updateSchedulingControls();
             this.showNotification(`${this.poolConfig.poolType} pool created with ${this.poolConfig.workerCount} workers`, 'success');
         } catch (err) {
             console.error('Create pool error:', err);
@@ -755,20 +938,26 @@ class PoolVisualizer {
                     <path d="M1 8l14-7v14L1 8z" fill="currentColor"/>
                 </svg>
             `;
+            this.updateSchedulingControls();
         }
     }
 
     // ==================== Utilities ====================
 
     showNotification(message, type = 'info') {
-        // Create notification element
+        const liveRegion = document.getElementById('notification-live-region');
+        if (liveRegion) {
+            liveRegion.setAttribute('role', type === 'error' ? 'alert' : 'status');
+            liveRegion.textContent = message;
+        }
+
+        const stack = document.getElementById('notification-stack');
+        if (!stack) return;
+
         const notification = document.createElement('div');
         notification.className = `notification notification-${type}`;
         const styles = getComputedStyle(document.body);
         notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
             padding: 16px 24px;
             background: ${styles.getPropertyValue('--tooltip-bg').trim()};
             backdrop-filter: blur(20px);
@@ -776,13 +965,13 @@ class PoolVisualizer {
             border-radius: 12px;
             color: ${styles.getPropertyValue('--text-primary').trim()};
             font-size: 14px;
-            z-index: 10000;
             animation: slideInRight 0.3s ease-out;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            pointer-events: auto;
         `;
         notification.textContent = message;
 
-        document.body.appendChild(notification);
+        stack.appendChild(notification);
 
         // Auto-remove after 3 seconds
         setTimeout(() => {
@@ -792,6 +981,10 @@ class PoolVisualizer {
     }
 
     startAnimationLoop() {
+        if (this.prefersReducedMotion) {
+            return;
+        }
+
         // Subtle background animation
         const orbs = document.querySelectorAll('.gradient-orb');
         let time = 0;
@@ -814,6 +1007,10 @@ class PoolVisualizer {
     logTaskEvent(event) {
         const logContainer = document.getElementById('task-log');
         if (!logContainer) return;
+        const emptyState = document.getElementById('task-log-empty-state');
+        if (emptyState) {
+            emptyState.remove();
+        }
 
         const { event_type, task_info } = event;
 
@@ -882,8 +1079,10 @@ style.textContent = `
         padding-right: 10px;
     }
     .log-entry {
-        display: flex;
-        justify-content: space-between;
+        display: grid;
+        grid-template-columns: minmax(72px, auto) minmax(0, 1fr) auto auto;
+        gap: 8px;
+        align-items: center;
         font-size: 12px;
         margin-bottom: 8px;
         padding: 4px 8px;
@@ -893,10 +1092,10 @@ style.textContent = `
     .log-entry span {
         white-space: nowrap;
     }
-    .log-timestamp { color: #6b7280; }
-    .log-task-id { color: #9ca3af; width: 120px; overflow: hidden; text-overflow: ellipsis; }
+    .log-timestamp { color: var(--text-dim); }
+    .log-task-id { color: var(--text-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .log-event-type { font-weight: 600; }
-    .log-duration { color: #6b7280; }
+    .log-duration { color: var(--text-dim); justify-self: end; }
 
     .log-submitted { background-color: rgba(59, 130, 246, 0.1); }
     .log-submitted .log-event-type { color: #3b82f6; }
@@ -906,5 +1105,19 @@ style.textContent = `
     .log-failed .log-event-type, .log-timeout .log-event-type { color: #ef4444; }
     .log-cancelled { background-color: rgba(245, 158, 11, 0.1); }
     .log-cancelled .log-event-type { color: #f59e0b; }
+
+    @media (max-width: 720px) {
+        .log-entry {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .log-task-id {
+            grid-column: 1 / -1;
+        }
+
+        .log-duration {
+            justify-self: start;
+        }
+    }
 `;
 document.head.appendChild(style);
