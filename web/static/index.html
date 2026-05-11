@@ -9,19 +9,22 @@
 </head>
 <body>
     <!-- Animated Background -->
-    <div class="background">
+    <div class="background" aria-hidden="true">
         <div class="gradient-orb orb-1"></div>
         <div class="gradient-orb orb-2"></div>
         <div class="gradient-orb orb-3"></div>
         <div class="grid-overlay"></div>
     </div>
 
+    <div class="sr-only" id="notification-live-region" role="status" aria-live="polite"></div>
+    <div class="notification-stack" id="notification-stack" aria-hidden="true"></div>
+
     <!-- Main Container -->
     <div class="container">
         <!-- Header -->
         <header class="glass-header">
             <div class="logo">
-                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
                     <circle cx="16" cy="16" r="14" stroke="url(#grad1)" stroke-width="2"/>
                     <path d="M16 8v16M12 12l8 8M20 12l-8 8" stroke="url(#grad1)" stroke-width="2" stroke-linecap="round"/>
                     <defs>
@@ -42,6 +45,10 @@
                     <span class="theme-toggle-label" id="theme-toggle-label">Dark Mode</span>
                 </button>
                 <div class="header-stats">
+                    <div class="stat-pill connection-pill" id="connection-status" data-state="connecting">
+                        <span class="stat-label">Connection</span>
+                        <span class="stat-value" id="connection-status-value">Connecting</span>
+                    </div>
                     <div class="stat-pill">
                         <span class="stat-label">Throughput</span>
                         <span class="stat-value" id="header-throughput">0</span>
@@ -56,36 +63,42 @@
             </div>
         </header>
 
+        <section class="status-banner glass-card hidden" id="status-banner" aria-live="polite">
+            <strong id="status-banner-title">Connecting</strong>
+            <p id="status-banner-text">Attempting to establish a live session with the thread pool service.</p>
+        </section>
+
         <!-- Main Content Grid -->
         <div class="content-grid">
             <!-- Left Panel - Controls -->
             <aside class="control-panel glass-card">
+                <div class="panel-eyebrow">Configure</div>
                 <h2>Pool Configuration</h2>
 
                 <!-- Pool Type Selector -->
                 <div class="control-group">
                     <label>
-                        <span>Next Pool Type</span>
-                        <span class="value-badge value-badge-muted" id="active-pool-display">Active: fixed</span>
+                        <span>Draft Pool Type</span>
+                        <span class="value-badge value-badge-muted" id="active-pool-display">Current Pool: fixed</span>
                     </label>
-                    <div class="pool-selector">
-                        <button class="pool-btn active" data-pool="fixed">
+                    <div class="pool-selector" role="radiogroup" aria-label="Draft pool type">
+                        <button class="pool-btn active" data-pool="fixed" type="button" role="radio" aria-checked="true">
                             <span class="pool-icon">⚡</span>
                             <span>Fixed</span>
                         </button>
-                        <button class="pool-btn" data-pool="cached">
+                        <button class="pool-btn" data-pool="cached" type="button" role="radio" aria-checked="false">
                             <span class="pool-icon">🔄</span>
                             <span>Cached</span>
                         </button>
-                        <button class="pool-btn" data-pool="dynamic">
+                        <button class="pool-btn" data-pool="dynamic" type="button" role="radio" aria-checked="false">
                             <span class="pool-icon">📈</span>
                             <span>Dynamic</span>
                         </button>
-                        <button class="pool-btn" data-pool="priority">
+                        <button class="pool-btn" data-pool="priority" type="button" role="radio" aria-checked="false">
                             <span class="pool-icon">⭐</span>
                             <span>Priority</span>
                         </button>
-                        <button class="pool-btn" data-pool="scheduled">
+                        <button class="pool-btn" data-pool="scheduled" type="button" role="radio" aria-checked="false">
                             <span class="pool-icon">⏰</span>
                             <span>Scheduled</span>
                         </button>
@@ -94,7 +107,7 @@
 
                 <!-- Worker Count -->
                 <div class="control-group">
-                    <label>
+                    <label for="worker-count">
                         <span>Worker Count</span>
                         <span class="value-badge" id="worker-count-display">4</span>
                     </label>
@@ -103,7 +116,7 @@
 
                 <!-- Queue Size -->
                 <div class="control-group">
-                    <label>
+                    <label for="queue-size">
                         <span>Queue Size</span>
                         <span class="value-badge" id="queue-size-display">50</span>
                     </label>
@@ -120,24 +133,25 @@
                 <div class="divider"></div>
 
                 <!-- Task Submission -->
+                <div class="panel-eyebrow">Dispatch</div>
                 <h2>Submit Tasks</h2>
 
                 <div class="control-group">
                     <label>Priority Level</label>
-                    <div class="priority-selector">
-                        <button class="priority-btn" data-priority="0">
+                    <div class="priority-selector" role="radiogroup" aria-label="Task priority">
+                        <button class="priority-btn" data-priority="0" type="button" role="radio" aria-checked="false">
                             <span class="priority-dot low"></span>
                             <span>Low</span>
                         </button>
-                        <button class="priority-btn active" data-priority="1">
+                        <button class="priority-btn active" data-priority="1" type="button" role="radio" aria-checked="true">
                             <span class="priority-dot normal"></span>
                             <span>Normal</span>
                         </button>
-                        <button class="priority-btn" data-priority="2">
+                        <button class="priority-btn" data-priority="2" type="button" role="radio" aria-checked="false">
                             <span class="priority-dot high"></span>
                             <span>High</span>
                         </button>
-                        <button class="priority-btn" data-priority="3">
+                        <button class="priority-btn" data-priority="3" type="button" role="radio" aria-checked="false">
                             <span class="priority-dot urgent"></span>
                             <span>Urgent</span>
                         </button>
@@ -145,7 +159,7 @@
                 </div>
 
                 <div class="control-group">
-                    <label>
+                    <label for="task-duration">
                         <span>Task Duration</span>
                         <span class="value-badge" id="duration-display">100ms</span>
                     </label>
@@ -153,7 +167,7 @@
                 </div>
 
                 <div class="control-group">
-                    <label>
+                    <label for="batch-size">
                         <span>Batch Size</span>
                         <span class="value-badge" id="batch-size-display">1</span>
                     </label>
@@ -162,16 +176,16 @@
 
                 <div class="control-group scheduling-group">
                     <label>Execution Mode</label>
-                    <div class="mode-selector">
-                        <button class="mode-btn active" data-mode="immediate" type="button">Immediate</button>
-                        <button class="mode-btn" data-mode="delayed" type="button">Delayed</button>
-                        <button class="mode-btn" data-mode="recurring" type="button">Recurring</button>
+                    <div class="mode-selector" role="radiogroup" aria-label="Task execution mode">
+                        <button class="mode-btn active" data-mode="immediate" type="button" role="radio" aria-checked="true">Immediate</button>
+                        <button class="mode-btn" data-mode="delayed" type="button" role="radio" aria-checked="false">Delayed</button>
+                        <button class="mode-btn" data-mode="recurring" type="button" role="radio" aria-checked="false">Recurring</button>
                     </div>
                     <p class="helper-text" id="scheduling-helper">Immediate batches can optionally chain task dependencies.</p>
                 </div>
 
                 <div class="control-group scheduling-detail hidden" id="delay-group">
-                    <label>
+                    <label for="delay-ms">
                         <span>Delay Before Run</span>
                         <span class="value-badge" id="delay-display">1000ms</span>
                     </label>
@@ -200,6 +214,7 @@
                         <path d="M1 8l14-7v14L1 8z" fill="currentColor"/>
                     </svg>
                 </button>
+                <p class="submit-context" id="submit-context">Immediate batches send directly to the active pool.</p>
             </aside>
 
             <!-- Center - Workers Grid -->
@@ -218,14 +233,22 @@
                     </div>
                 </div>
 
-                <div class="workers-grid" id="workers-grid">
-                    <!-- Worker cards will be inserted here -->
+                <div class="empty-state-card" id="workers-empty-state">
+                    <strong>No active workers yet</strong>
+                    <p>Create a pool to provision workers and start receiving live runtime state.</p>
                 </div>
+                <div class="workers-grid" id="workers-grid"></div>
 
                 <div class="queue-visualization glass-card">
-                    <h3>Task Queue</h3>
+                    <div class="chart-header">
+                        <div>
+                            <h3>Task Queue</h3>
+                            <p class="chart-subtitle">Capacity pressure on the active pool</p>
+                        </div>
+                        <span class="chart-chip" id="queue-health-chip">Healthy</span>
+                    </div>
                     <div class="queue-container">
-                        <div class="queue-bar">
+                        <div class="queue-bar" id="queue-bar" role="progressbar" aria-label="Task queue usage" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
                             <div class="queue-fill" id="queue-fill"></div>
                             <div class="queue-label">
                                 <span id="queue-current">0</span>
@@ -234,6 +257,7 @@
                             </div>
                         </div>
                     </div>
+                    <p class="chart-summary" id="queue-summary">Queue is idle. Submit tasks to see utilization trends.</p>
                 </div>
             </main>
 
@@ -278,19 +302,37 @@
 
                 <!-- Charts -->
                 <div class="chart-container glass-card">
-                    <h3>Throughput Over Time</h3>
-                    <canvas id="throughput-chart"></canvas>
+                    <div class="chart-header">
+                        <div>
+                            <h3>Throughput Over Time</h3>
+                            <p class="chart-subtitle">Last 5 minutes</p>
+                        </div>
+                        <span class="chart-chip" id="throughput-chip">Waiting</span>
+                    </div>
+                    <div class="chart-empty-state" id="throughput-empty-state">Waiting for live throughput data.</div>
+                    <canvas id="throughput-chart" aria-label="Throughput chart" role="img"></canvas>
+                    <p class="chart-summary" id="throughput-summary">Throughput summary unavailable.</p>
                 </div>
 
                 <div class="chart-container glass-card">
-                    <h3>Worker Utilization</h3>
-                    <canvas id="utilization-chart"></canvas>
+                    <div class="chart-header">
+                        <div>
+                            <h3>Worker Utilization</h3>
+                            <p class="chart-subtitle">Current active vs idle worker share</p>
+                        </div>
+                        <span class="chart-chip" id="utilization-chip">Idle</span>
+                    </div>
+                    <div class="chart-empty-state" id="utilization-empty-state">Worker utilization will appear once a pool is active.</div>
+                    <canvas id="utilization-chart" aria-label="Worker utilization chart" role="img"></canvas>
+                    <p class="chart-summary" id="utilization-summary">Worker utilization summary unavailable.</p>
                 </div>
 
                 <div class="task-log-container glass-card">
                     <h3>Task Event Log</h3>
-                    <div class="task-log" id="task-log">
-                        <!-- Log entries will be inserted here -->
+                    <div class="task-log" id="task-log" role="log" aria-live="polite" aria-relevant="additions text">
+                        <div class="empty-log-state" id="task-log-empty-state">
+                            Submit work to populate the live event timeline with task lifecycle entries.
+                        </div>
                     </div>
                 </div>
             </aside>
