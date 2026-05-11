@@ -27,10 +27,10 @@ This document lists the high-level engineering tasks derived from the product ro
 
 ### Phase 3: Enhanced User Experience & Enterprise Features
 
-- [ ] **Epic 5: Rich Web Visualizer UI**
+- [x] **Epic 5: Rich Web Visualizer UI**
   - [x] **Ticket #12:** Implement Real-Time Task Event Log in UI.
-  - [ ] **Ticket #13:** Add UI Controls for Advanced Scheduling.
-  - [ ] **Ticket #14:** Implement Light/Dark Mode Theme.
+  - [x] **Ticket #13:** Add UI Controls for Advanced Scheduling.
+  - [x] **Ticket #14:** Implement Light/Dark Mode Theme.
 
 - [x] **Epic 6: Enterprise Readiness**
   - [x] **Ticket #15:** Add API Key Authentication to Web Server.

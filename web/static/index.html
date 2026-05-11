@@ -31,18 +31,27 @@
                         </linearGradient>
                     </defs>
                 </svg>
-                <h1>Thread Pool <span class="gradient-text">Visualizer</span></h1>
-            </div>
-            <div class="header-stats">
-                <div class="stat-pill">
-                    <span class="stat-label">Throughput</span>
-                    <span class="stat-value" id="header-throughput">0</span>
-                    <span class="stat-unit">tasks/s</span>
+                <div>
+                    <h1>Thread Pool <span class="gradient-text">Visualizer</span></h1>
+                    <p class="header-subtitle">Real-time orchestration with scheduling and theme controls</p>
                 </div>
-                <div class="stat-pill">
-                    <span class="stat-label">Success Rate</span>
-                    <span class="stat-value" id="header-success">100</span>
-                    <span class="stat-unit">%</span>
+            </div>
+            <div class="header-actions">
+                <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">
+                    <span class="theme-toggle-icon" id="theme-toggle-icon">☾</span>
+                    <span class="theme-toggle-label" id="theme-toggle-label">Dark Mode</span>
+                </button>
+                <div class="header-stats">
+                    <div class="stat-pill">
+                        <span class="stat-label">Throughput</span>
+                        <span class="stat-value" id="header-throughput">0</span>
+                        <span class="stat-unit">tasks/s</span>
+                    </div>
+                    <div class="stat-pill">
+                        <span class="stat-label">Success Rate</span>
+                        <span class="stat-value" id="header-success">100</span>
+                        <span class="stat-unit">%</span>
+                    </div>
                 </div>
             </div>
         </header>
@@ -55,7 +64,10 @@
 
                 <!-- Pool Type Selector -->
                 <div class="control-group">
-                    <label>Pool Type</label>
+                    <label>
+                        <span>Next Pool Type</span>
+                        <span class="value-badge value-badge-muted" id="active-pool-display">Active: fixed</span>
+                    </label>
                     <div class="pool-selector">
                         <button class="pool-btn active" data-pool="fixed">
                             <span class="pool-icon">⚡</span>
@@ -146,6 +158,40 @@
                         <span class="value-badge" id="batch-size-display">1</span>
                     </label>
                     <input type="range" id="batch-size" min="1" max="50" value="1" class="slider">
+                </div>
+
+                <div class="control-group scheduling-group">
+                    <label>Execution Mode</label>
+                    <div class="mode-selector">
+                        <button class="mode-btn active" data-mode="immediate" type="button">Immediate</button>
+                        <button class="mode-btn" data-mode="delayed" type="button">Delayed</button>
+                        <button class="mode-btn" data-mode="recurring" type="button">Recurring</button>
+                    </div>
+                    <p class="helper-text" id="scheduling-helper">Immediate batches can optionally chain task dependencies.</p>
+                </div>
+
+                <div class="control-group scheduling-detail hidden" id="delay-group">
+                    <label>
+                        <span>Delay Before Run</span>
+                        <span class="value-badge" id="delay-display">1000ms</span>
+                    </label>
+                    <input type="range" id="delay-ms" min="100" max="10000" step="100" value="1000" class="slider">
+                </div>
+
+                <div class="control-group scheduling-detail hidden" id="cron-group">
+                    <label for="cron-expression">Cron Expression</label>
+                    <input type="text" id="cron-expression" class="text-input" value="*/5 * * * * *" placeholder="*/5 * * * * *">
+                    <p class="helper-text">Uses 6-field cron syntax. Example: <code>*/5 * * * * *</code></p>
+                </div>
+
+                <div class="control-group scheduling-detail" id="chain-group">
+                    <label class="toggle-row" for="chain-dependencies">
+                        <span>
+                            <strong>Chain Dependencies</strong>
+                            <small>Run each task after the previous one completes</small>
+                        </span>
+                        <input type="checkbox" id="chain-dependencies">
+                    </label>
                 </div>
 
                 <button class="btn-accent" id="submit-task">

@@ -15,16 +15,26 @@ class PoolVisualizer {
             queueSize: 50,
             priority: 1,
             taskDuration: 100,
-            batchSize: 1
+            batchSize: 1,
+            schedulingMode: 'immediate',
+            delayMs: 1000,
+            cronExpression: '*/5 * * * * *',
+            chainDependencies: false
         };
+        this.appliedPoolConfig = { ...this.poolConfig };
+        this.activePoolType = this.poolConfig.poolType;
+        this.activeQueueCapacity = this.poolConfig.queueSize;
         this.apiKey = new URLSearchParams(window.location.search).get('api_key') || '';
+        this.theme = localStorage.getItem('thread-pool-theme') || 'dark';
 
         this.init();
     }
 
     init() {
+        this.applyTheme(this.theme);
         this.setupEventListeners();
         this.initializeCharts();
+        this.updateSchedulingControls();
         this.connectWebSocket();
         this.startAnimationLoop();
     }
@@ -103,7 +113,13 @@ class PoolVisualizer {
         this.updateWorkerGrid(state.workers || [], state.active_workers || 0);
 
         // Update queue visualization
-        this.updateQueue(state.queue_size || 0, this.poolConfig.queueSize);
+        this.activePoolType = state.pool_type || this.activePoolType;
+        this.activeQueueCapacity = state.queue_capacity || this.activeQueueCapacity;
+        const activePoolDisplay = document.getElementById('active-pool-display');
+        if (activePoolDisplay) {
+            activePoolDisplay.textContent = `Active: ${this.activePoolType}`;
+        }
+        this.updateQueue(state.queue_size || 0, this.activeQueueCapacity);
 
         // Update worker summary
         const activeCount = state.active_workers || 0;
@@ -294,6 +310,8 @@ class PoolVisualizer {
     // ==================== Charts ====================
 
     initializeCharts() {
+        const palette = this.getThemePalette();
+
         // Throughput chart
         const throughputCtx = document.getElementById('throughput-chart').getContext('2d');
         this.charts.throughput = new Chart(throughputCtx, {
@@ -303,8 +321,8 @@ class PoolVisualizer {
                 datasets: [{
                     label: 'Tasks/sec',
                     data: [],
-                    borderColor: '#00D9FF',
-                    backgroundColor: 'rgba(0, 217, 255, 0.1)',
+                    borderColor: palette.cyan,
+                    backgroundColor: `${palette.cyan}1a`,
                     borderWidth: 2,
                     tension: 0.4,
                     fill: true,
@@ -320,10 +338,10 @@ class PoolVisualizer {
                     tooltip: {
                         mode: 'index',
                         intersect: false,
-                        backgroundColor: 'rgba(17, 24, 39, 0.9)',
-                        titleColor: '#00D9FF',
-                        bodyColor: '#E5E7EB',
-                        borderColor: 'rgba(0, 217, 255, 0.3)',
+                        backgroundColor: palette.tooltipBg,
+                        titleColor: palette.cyan,
+                        bodyColor: palette.textPrimary,
+                        borderColor: palette.tooltipBorder,
                         borderWidth: 1,
                         padding: 12,
                         displayColors: false
@@ -333,7 +351,7 @@ class PoolVisualizer {
                     x: {
                         display: true,
                         ticks: {
-                            color: '#9CA3AF',
+                            color: palette.textSecondary,
                             font: { size: 10 },
                             maxRotation: 0,
                             minRotation: 0,
@@ -347,11 +365,11 @@ class PoolVisualizer {
                     y: {
                         beginAtZero: true,
                         grid: {
-                            color: 'rgba(255, 255, 255, 0.05)',
+                            color: palette.grid,
                             drawBorder: false
                         },
                         ticks: {
-                            color: '#9CA3AF',
+                            color: palette.textSecondary,
                             font: { size: 11 }
                         }
                     }
@@ -376,12 +394,12 @@ class PoolVisualizer {
                 datasets: [{
                     data: [0, 100],
                     backgroundColor: [
-                        'rgba(139, 92, 246, 0.8)',
-                        'rgba(255, 255, 255, 0.1)'
+                        `${palette.purple}cc`,
+                        palette.chartIdle
                     ],
                     borderColor: [
-                        '#8B5CF6',
-                        'rgba(255, 255, 255, 0.2)'
+                        palette.purple,
+                        palette.grid
                     ],
                     borderWidth: 2
                 }]
@@ -395,16 +413,16 @@ class PoolVisualizer {
                         display: true,
                         position: 'bottom',
                         labels: {
-                            color: '#E5E7EB',
+                            color: palette.textPrimary,
                             padding: 16,
                             font: { size: 12 }
                         }
                     },
                     tooltip: {
-                        backgroundColor: 'rgba(17, 24, 39, 0.9)',
-                        titleColor: '#8B5CF6',
-                        bodyColor: '#E5E7EB',
-                        borderColor: 'rgba(139, 92, 246, 0.3)',
+                        backgroundColor: palette.tooltipBg,
+                        titleColor: palette.purple,
+                        bodyColor: palette.textPrimary,
+                        borderColor: palette.tooltipBorder,
                         borderWidth: 1,
                         padding: 12,
                         callbacks: {
@@ -452,13 +470,113 @@ class PoolVisualizer {
 
     // ==================== Event Handlers ====================
 
+    getThemePalette() {
+        const styles = getComputedStyle(document.body);
+        return {
+            textPrimary: styles.getPropertyValue('--text-primary').trim(),
+            textSecondary: styles.getPropertyValue('--text-secondary').trim(),
+            textDim: styles.getPropertyValue('--text-dim').trim(),
+            grid: styles.getPropertyValue('--chart-grid').trim(),
+            tooltipBg: styles.getPropertyValue('--tooltip-bg').trim(),
+            tooltipBorder: styles.getPropertyValue('--tooltip-border').trim(),
+            chartIdle: styles.getPropertyValue('--chart-idle').trim(),
+            cyan: styles.getPropertyValue('--primary-cyan').trim(),
+            purple: styles.getPropertyValue('--primary-purple').trim()
+        };
+    }
+
+    applyTheme(theme) {
+        this.theme = theme === 'light' ? 'light' : 'dark';
+        document.body.classList.toggle('theme-light', this.theme === 'light');
+        localStorage.setItem('thread-pool-theme', this.theme);
+
+        const icon = document.getElementById('theme-toggle-icon');
+        const label = document.getElementById('theme-toggle-label');
+        if (icon) icon.textContent = this.theme === 'light' ? '☀︎' : '☾';
+        if (label) label.textContent = this.theme === 'light' ? 'Light Mode' : 'Dark Mode';
+
+        this.refreshChartTheme();
+    }
+
+    refreshChartTheme() {
+        const palette = this.getThemePalette();
+        if (this.charts.throughput) {
+            this.charts.throughput.data.datasets[0].borderColor = palette.cyan;
+            this.charts.throughput.data.datasets[0].backgroundColor = `${palette.cyan}1a`;
+            this.charts.throughput.options.plugins.tooltip.backgroundColor = palette.tooltipBg;
+            this.charts.throughput.options.plugins.tooltip.titleColor = palette.cyan;
+            this.charts.throughput.options.plugins.tooltip.bodyColor = palette.textPrimary;
+            this.charts.throughput.options.plugins.tooltip.borderColor = palette.tooltipBorder;
+            this.charts.throughput.options.scales.x.ticks.color = palette.textSecondary;
+            this.charts.throughput.options.scales.y.ticks.color = palette.textSecondary;
+            this.charts.throughput.options.scales.y.grid.color = palette.grid;
+            this.charts.throughput.update('none');
+        }
+
+        if (this.charts.utilization) {
+            this.charts.utilization.data.datasets[0].backgroundColor = [
+                `${palette.purple}cc`,
+                palette.chartIdle
+            ];
+            this.charts.utilization.data.datasets[0].borderColor = [
+                palette.purple,
+                palette.grid
+            ];
+            this.charts.utilization.options.plugins.legend.labels.color = palette.textPrimary;
+            this.charts.utilization.options.plugins.tooltip.backgroundColor = palette.tooltipBg;
+            this.charts.utilization.options.plugins.tooltip.titleColor = palette.purple;
+            this.charts.utilization.options.plugins.tooltip.bodyColor = palette.textPrimary;
+            this.charts.utilization.options.plugins.tooltip.borderColor = palette.tooltipBorder;
+            this.charts.utilization.update('none');
+        }
+    }
+
+    updateSchedulingControls() {
+        const mode = this.poolConfig.schedulingMode;
+        const delayGroup = document.getElementById('delay-group');
+        const cronGroup = document.getElementById('cron-group');
+        const chainGroup = document.getElementById('chain-group');
+        const chainCheckbox = document.getElementById('chain-dependencies');
+        const helper = document.getElementById('scheduling-helper');
+
+        delayGroup.classList.toggle('hidden', mode !== 'delayed');
+        cronGroup.classList.toggle('hidden', mode !== 'recurring');
+        chainGroup.classList.toggle('hidden', mode !== 'immediate');
+        chainCheckbox.disabled = mode !== 'immediate';
+        chainCheckbox.checked = this.poolConfig.chainDependencies;
+
+        if (helper) {
+            if (mode === 'delayed') {
+                helper.textContent = 'Delayed and recurring submissions require a scheduled pool.';
+            } else if (mode === 'recurring') {
+                helper.textContent = 'Recurring submissions use a 6-field cron expression and require a scheduled pool.';
+            } else {
+                helper.textContent = 'Immediate batches can optionally chain task dependencies.';
+            }
+        }
+    }
+
     setupEventListeners() {
+        const themeToggle = document.getElementById('theme-toggle');
+        themeToggle.addEventListener('click', () => {
+            this.applyTheme(this.theme === 'light' ? 'dark' : 'light');
+        });
+
         // Pool type selector
         document.querySelectorAll('.pool-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 document.querySelectorAll('.pool-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 this.poolConfig.poolType = btn.dataset.pool;
+            });
+        });
+
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.poolConfig.schedulingMode = btn.dataset.mode;
+                this.updateSchedulingControls();
             });
         });
 
@@ -503,6 +621,23 @@ class PoolVisualizer {
             batchDisplay.textContent = e.target.value;
         });
 
+        const delaySlider = document.getElementById('delay-ms');
+        const delayDisplay = document.getElementById('delay-display');
+        delaySlider.addEventListener('input', (e) => {
+            this.poolConfig.delayMs = parseInt(e.target.value);
+            delayDisplay.textContent = e.target.value + 'ms';
+        });
+
+        const cronInput = document.getElementById('cron-expression');
+        cronInput.addEventListener('input', (e) => {
+            this.poolConfig.cronExpression = e.target.value.trim();
+        });
+
+        const chainCheckbox = document.getElementById('chain-dependencies');
+        chainCheckbox.addEventListener('change', (e) => {
+            this.poolConfig.chainDependencies = e.target.checked;
+        });
+
         // Create pool button
         document.getElementById('create-pool').addEventListener('click', () => {
             this.createPool();
@@ -544,6 +679,9 @@ class PoolVisualizer {
 
             if (!response.ok) throw new Error('Failed to create pool');
 
+            this.appliedPoolConfig = { ...this.poolConfig };
+            this.activePoolType = this.poolConfig.poolType;
+            this.activeQueueCapacity = this.poolConfig.queueSize;
             this.showNotification(`${this.poolConfig.poolType} pool created with ${this.poolConfig.workerCount} workers`, 'success');
         } catch (err) {
             console.error('Create pool error:', err);
@@ -565,24 +703,50 @@ class PoolVisualizer {
         btn.innerHTML = '<span>Submitting...</span>';
 
         try {
+            if (this.poolConfig.schedulingMode !== 'immediate' && this.activePoolType !== 'scheduled') {
+                throw new Error('Delayed and recurring runs require a scheduled pool');
+            }
+
+            if (this.poolConfig.schedulingMode === 'recurring' && !this.poolConfig.cronExpression) {
+                throw new Error('Cron expression is required for recurring runs');
+            }
+
+            const payload = {
+                priority: this.poolConfig.priority,
+                duration_ms: this.poolConfig.taskDuration,
+                should_fail: false,
+                task_count: this.poolConfig.batchSize
+            };
+
+            if (this.poolConfig.schedulingMode === 'delayed') {
+                payload.delay_ms = this.poolConfig.delayMs;
+            }
+            if (this.poolConfig.schedulingMode === 'recurring') {
+                payload.cron_expression = this.poolConfig.cronExpression;
+            }
+            if (this.poolConfig.schedulingMode === 'immediate' && this.poolConfig.chainDependencies) {
+                payload.chain_dependencies = true;
+            }
+
             const response = await fetch(this.apiURL('/api/v1/task/submit'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    priority: this.poolConfig.priority,
-                    duration_ms: this.poolConfig.taskDuration,
-                    should_fail: false,
-                    task_count: this.poolConfig.batchSize
-                })
+                body: JSON.stringify(payload)
             });
 
-            if (!response.ok) throw new Error('Failed to submit task');
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'Failed to submit task');
+            }
 
             const result = await response.json();
-            this.showNotification(`Submitted ${result.count} task(s)`, 'success');
+            const modeLabel = this.poolConfig.schedulingMode === 'immediate'
+                ? (this.poolConfig.chainDependencies ? 'chained batch' : 'immediate batch')
+                : this.poolConfig.schedulingMode;
+            this.showNotification(`Submitted ${result.count} task(s) as ${modeLabel}`, 'success');
         } catch (err) {
             console.error('Submit task error:', err);
-            this.showNotification('Failed to submit task', 'error');
+            this.showNotification(err.message || 'Failed to submit task', 'error');
         } finally {
             btn.disabled = false;
             btn.innerHTML = `
@@ -600,16 +764,17 @@ class PoolVisualizer {
         // Create notification element
         const notification = document.createElement('div');
         notification.className = `notification notification-${type}`;
+        const styles = getComputedStyle(document.body);
         notification.style.cssText = `
             position: fixed;
             top: 20px;
             right: 20px;
             padding: 16px 24px;
-            background: rgba(17, 24, 39, 0.95);
+            background: ${styles.getPropertyValue('--tooltip-bg').trim()};
             backdrop-filter: blur(20px);
             border: 1px solid ${type === 'success' ? '#10B981' : type === 'error' ? '#EF4444' : '#F59E0B'};
             border-radius: 12px;
-            color: #E5E7EB;
+            color: ${styles.getPropertyValue('--text-primary').trim()};
             font-size: 14px;
             z-index: 10000;
             animation: slideInRight 0.3s ease-out;
