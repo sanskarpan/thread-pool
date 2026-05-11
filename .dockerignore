@@ -1,0 +1,15 @@
+# Git
+.git
+.gitignore
+
+# Go
+bin/
+vendor/
+
+# OS-specific
+.DS_Store
+*.local
+
+# Secrets / Environment
+.env*
+*.log
