@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thread Pool Visualizer | Real-time Performance Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- Animated Background -->
+    <div class="background">
+        <div class="gradient-orb orb-1"></div>
+        <div class="gradient-orb orb-2"></div>
+        <div class="gradient-orb orb-3"></div>
+        <div class="grid-overlay"></div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Header -->
+        <header class="glass-header">
+            <div class="logo">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                    <circle cx="16" cy="16" r="14" stroke="url(#grad1)" stroke-width="2"/>
+                    <path d="M16 8v16M12 12l8 8M20 12l-8 8" stroke="url(#grad1)" stroke-width="2" stroke-linecap="round"/>
+                    <defs>
+                        <linearGradient id="grad1" x1="0" y1="0" x2="32" y2="32">
+                            <stop offset="0%" stop-color="#00D9FF"/>
+                            <stop offset="100%" stop-color="#8B5CF6"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <h1>Thread Pool <span class="gradient-text">Visualizer</span></h1>
+            </div>
+            <div class="header-stats">
+                <div class="stat-pill">
+                    <span class="stat-label">Throughput</span>
+                    <span class="stat-value" id="header-throughput">0</span>
+                    <span class="stat-unit">tasks/s</span>
+                </div>
+                <div class="stat-pill">
+                    <span class="stat-label">Success Rate</span>
+                    <span class="stat-value" id="header-success">100</span>
+                    <span class="stat-unit">%</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Grid -->
+        <div class="content-grid">
+            <!-- Left Panel - Controls -->
+            <aside class="control-panel glass-card">
+                <h2>Pool Configuration</h2>
+
+                <!-- Pool Type Selector -->
+                <div class="control-group">
+                    <label>Pool Type</label>
+                    <div class="pool-selector">
+                        <button class="pool-btn active" data-pool="fixed">
+                            <span class="pool-icon">⚡</span>
+                            <span>Fixed</span>
+                        </button>
+                        <button class="pool-btn" data-pool="cached">
+                            <span class="pool-icon">🔄</span>
+                            <span>Cached</span>
+                        </button>
+                        <button class="pool-btn" data-pool="dynamic">
+                            <span class="pool-icon">📈</span>
+                            <span>Dynamic</span>
+                        </button>
+                        <button class="pool-btn" data-pool="priority">
+                            <span class="pool-icon">⭐</span>
+                            <span>Priority</span>
+                        </button>
+                        <button class="pool-btn" data-pool="scheduled">
+                            <span class="pool-icon">⏰</span>
+                            <span>Scheduled</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Worker Count -->
+                <div class="control-group">
+                    <label>
+                        <span>Worker Count</span>
+                        <span class="value-badge" id="worker-count-display">4</span>
+                    </label>
+                    <input type="range" id="worker-count" min="1" max="16" value="4" class="slider">
+                </div>
+
+                <!-- Queue Size -->
+                <div class="control-group">
+                    <label>
+                        <span>Queue Size</span>
+                        <span class="value-badge" id="queue-size-display">50</span>
+                    </label>
+                    <input type="range" id="queue-size" min="10" max="500" value="50" class="slider">
+                </div>
+
+                <button class="btn-primary" id="create-pool">
+                    <span>Create Pool</span>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 1v14M1 8h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+
+                <div class="divider"></div>
+
+                <!-- Task Submission -->
+                <h2>Submit Tasks</h2>
+
+                <div class="control-group">
+                    <label>Priority Level</label>
+                    <div class="priority-selector">
+                        <button class="priority-btn" data-priority="0">
+                            <span class="priority-dot low"></span>
+                            <span>Low</span>
+                        </button>
+                        <button class="priority-btn active" data-priority="1">
+                            <span class="priority-dot normal"></span>
+                            <span>Normal</span>
+                        </button>
+                        <button class="priority-btn" data-priority="2">
+                            <span class="priority-dot high"></span>
+                            <span>High</span>
+                        </button>
+                        <button class="priority-btn" data-priority="3">
+                            <span class="priority-dot urgent"></span>
+                            <span>Urgent</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>
+                        <span>Task Duration</span>
+                        <span class="value-badge" id="duration-display">100ms</span>
+                    </label>
+                    <input type="range" id="task-duration" min="10" max="2000" value="100" class="slider">
+                </div>
+
+                <div class="control-group">
+                    <label>
+                        <span>Batch Size</span>
+                        <span class="value-badge" id="batch-size-display">1</span>
+                    </label>
+                    <input type="range" id="batch-size" min="1" max="50" value="1" class="slider">
+                </div>
+
+                <button class="btn-accent" id="submit-task">
+                    <span>Submit Tasks</span>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M1 8l14-7v14L1 8z" fill="currentColor"/>
+                    </svg>
+                </button>
+            </aside>
+
+            <!-- Center - Workers Grid -->
+            <main class="workers-section">
+                <div class="section-header glass-card">
+                    <h2>Worker Status</h2>
+                    <div class="worker-summary">
+                        <div class="summary-item">
+                            <span class="status-dot busy"></span>
+                            <span>Active: <strong id="active-count">0</strong></span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="status-dot idle"></span>
+                            <span>Idle: <strong id="idle-count">0</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="workers-grid" id="workers-grid">
+                    <!-- Worker cards will be inserted here -->
+                </div>
+
+                <div class="queue-visualization glass-card">
+                    <h3>Task Queue</h3>
+                    <div class="queue-container">
+                        <div class="queue-bar">
+                            <div class="queue-fill" id="queue-fill"></div>
+                            <div class="queue-label">
+                                <span id="queue-current">0</span>
+                                <span>/</span>
+                                <span id="queue-capacity">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Right Panel - Metrics -->
+            <aside class="metrics-panel">
+                <!-- Metrics Cards -->
+                <div class="metrics-grid">
+                    <div class="metric-card glass-card">
+                        <div class="metric-icon cyan">📤</div>
+                        <div class="metric-content">
+                            <span class="metric-label">Submitted</span>
+                            <span class="metric-value" id="tasks-submitted">0</span>
+                        </div>
+                    </div>
+
+                    <div class="metric-card glass-card">
+                        <div class="metric-icon green">✓</div>
+                        <div class="metric-content">
+                            <span class="metric-label">Completed</span>
+                            <span class="metric-value" id="tasks-completed">0</span>
+                        </div>
+                    </div>
+
+                    <div class="metric-card glass-card">
+                        <div class="metric-icon purple">⚡</div>
+                        <div class="metric-content">
+                            <span class="metric-label">Throughput</span>
+                            <span class="metric-value" id="throughput">0</span>
+                            <span class="metric-unit">t/s</span>
+                        </div>
+                    </div>
+
+                    <div class="metric-card glass-card">
+                        <div class="metric-icon pink">⏱️</div>
+                        <div class="metric-content">
+                            <span class="metric-label">Avg Time</span>
+                            <span class="metric-value" id="avg-time">0</span>
+                            <span class="metric-unit">ms</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="chart-container glass-card">
+                    <h3>Throughput Over Time</h3>
+                    <canvas id="throughput-chart"></canvas>
+                </div>
+
+                <div class="chart-container glass-card">
+                    <h3>Worker Utilization</h3>
+                    <canvas id="utilization-chart"></canvas>
+                </div>
+
+                <div class="task-log-container glass-card">
+                    <h3>Task Event Log</h3>
+                    <div class="task-log" id="task-log">
+                        <!-- Log entries will be inserted here -->
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
