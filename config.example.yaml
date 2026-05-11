@@ -1,0 +1,6 @@
+host: 0.0.0.0
+port: 8080
+tracing: false
+api_key: ""
+protect_metrics: false
+protect_swagger: false
